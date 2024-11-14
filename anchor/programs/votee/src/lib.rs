@@ -6,10 +6,6 @@ declare_id!("39iYECXn1q87xKCTdAGgbADtbcByTC4qdW8bkWH43evt");
 
 pub const ANCHOR_DISCRIMINATOR_SIZE: usize = 8;
 
-mod errors;
-mod states;
-use states::Poll;
-
 #[program]
 pub mod votee {
     use super::*;
@@ -30,7 +26,7 @@ pub mod votee {
         end: u64,
     ) -> Result<()> {
         if start >= end {
-            return Err(errors::ErrorCode::InvalidDates.into());
+            return Err(ErrorCode::InvalidDates.into());
         }
 
         let counter = &mut ctx.accounts.counter;
@@ -53,12 +49,12 @@ pub mod votee {
     ) -> Result<()> {
         let poll = &mut ctx.accounts.poll;
         if poll.id != poll_id {
-            return Err(errors::ErrorCode::PollDoesNotExist.into());
+            return Err(ErrorCode::PollDoesNotExist.into());
         }
 
         let candidate = &mut ctx.accounts.candidate;
         if candidate.has_registered {
-            return Err(errors::ErrorCode::CandidateAlreadyRegistered.into());
+            return Err(ErrorCode::CandidateAlreadyRegistered.into());
         }
 
         let registerations = &mut ctx.accounts.registerations;
@@ -78,16 +74,16 @@ pub mod votee {
         let poll = &mut ctx.accounts.poll;
 
         if !candidate.has_registered || candidate.poll_id != poll_id {
-            return Err(errors::ErrorCode::CandidateNotRegistered.into());
+            return Err(ErrorCode::CandidateNotRegistered.into());
         }
 
         if voter.has_voted {
-            return Err(errors::ErrorCode::VoterAlreadyVoted.into());
+            return Err(ErrorCode::VoterAlreadyVoted.into());
         }
 
         let current_timestamp = Clock::get()?.unix_timestamp as u64;
         if current_timestamp < poll.start || current_timestamp > poll.end {
-            return Err(errors::ErrorCode::PollNotActive.into());
+            return Err(ErrorCode::PollNotActive.into());
         }
 
         voter.poll_id = poll_id;
@@ -241,4 +237,33 @@ pub struct Vote<'info> {
     pub user: Signer<'info>, // Voter's signer account
 
     pub system_program: Program<'info, System>,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct Poll {
+    pub id: u64,
+    #[max_len(280)]
+    pub description: String,
+    pub start: u64,
+    pub end: u64,
+    pub candidates: u64,
+}
+
+#[error_code]
+pub enum ErrorCode {
+    #[msg("Poll counter cannot be less than zero")]
+    PollCounterUnderflow,
+    #[msg("Voter cannot vote twice")]
+    VoterAlreadyVoted,
+    #[msg("Candidate cannot register twice")]
+    CandidateAlreadyRegistered,
+    #[msg("Start date cannot be greater than end date")]
+    InvalidDates,
+    #[msg("Candidate is not in the poll")]
+    CandidateNotRegistered,
+    #[msg("Poll not currently active")]
+    PollNotActive,
+    #[msg("Poll does not exist or not found")]
+    PollDoesNotExist,
 }
