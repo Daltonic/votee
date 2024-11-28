@@ -1,6 +1,16 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { FaTimes } from 'react-icons/fa'
+import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
+import { globalActions } from '../store/globalSlices'
+import { RootState } from '../utils/interfaces'
+import { useWallet } from '@solana/wallet-adapter-react'
+import {
+  fetchAllCandidates,
+  fetchPollDetails,
+  getProvider,
+  registerCandidate,
+} from '../services/blokchain'
 
 const RegCandidate = ({
   pollId,
@@ -10,24 +20,37 @@ const RegCandidate = ({
   pollAddress: string
 }) => {
   const [candidateName, setCandidateName] = useState<string>('')
-  const [modalVisible, setModalVisible] = useState<boolean>(true)
+  const dispatch = useDispatch()
+  const { setRegModal } = globalActions
+  const { regModal } = useSelector((states: RootState) => states.globalStates)
+
+  const { publicKey, signTransaction, sendTransaction } = useWallet()
+  const program = useMemo(
+    () => getProvider(publicKey, signTransaction, sendTransaction),
+    [publicKey, signTransaction, sendTransaction]
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!candidateName) return
+    if (!program || !publicKey || !candidateName) return
 
     await toast.promise(
-      new Promise<void>((resolve, reject) => {
+      new Promise<void>(async (resolve, reject) => {
         try {
-          console.log(
-            `Registering candidate: ${candidateName} for poll: ${pollId}`
+          const tx = await registerCandidate(
+            program!,
+            publicKey!,
+            pollId!,
+            candidateName!
           )
-          // Simulate successful registration
-          setTimeout(() => {
-            setCandidateName('')
-            setModalVisible(false)
-            resolve()
-          }, 1000)
+          setCandidateName('')
+          dispatch(setRegModal('scale-0'))
+
+          await fetchPollDetails(program!, pollAddress!)
+          await fetchAllCandidates(program!, pollAddress!)
+
+          console.log(tx)
+          resolve(tx as any)
         } catch (error) {
           console.error('Registration failed:', error)
           reject(error)
@@ -41,12 +64,10 @@ const RegCandidate = ({
     )
   }
 
-  if (!modalVisible) return null
-
   return (
     <div
       className={`fixed top-0 left-0 w-screen h-screen flex items-center justify-center
-      bg-black bg-opacity-50 transform z-[3000] transition-transform duration-300`}
+      bg-black bg-opacity-50 transform z-[3000] transition-transform ${regModal} duration-300`}
     >
       <div className="bg-white shadow-lg shadow-slate-900 rounded-xl w-11/12 md:w-2/5 h-7/12 p-6">
         <form className="space-y-6" onSubmit={handleSubmit}>
@@ -57,7 +78,7 @@ const RegCandidate = ({
             <button
               type="button"
               className="border-0 bg-transparent focus:outline-none"
-              onClick={() => setModalVisible(false)}
+              onClick={() => dispatch(setRegModal('scale-0'))}
             >
               <FaTimes className="text-gray-400" />
             </button>

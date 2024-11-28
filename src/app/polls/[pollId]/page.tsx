@@ -1,43 +1,41 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { FaRegEdit } from 'react-icons/fa'
 import CandidateList from '@/app/components/CandidateList'
 import RegCandidate from '@/app/components/RegCandidate'
-import { Candidate, Poll } from '@/app/utils/interfaces'
+import { RootState } from '@/app/utils/interfaces'
+import { useDispatch, useSelector } from 'react-redux'
+import { globalActions } from '@/app/store/globalSlices'
+import { useParams } from 'next/navigation'
+import { useWallet } from '@solana/wallet-adapter-react'
+import {
+  fetchAllCandidates,
+  fetchPollDetails,
+  getReadOnlyProvider,
+} from '@/app/services/blokchain'
 
 export default function PollDetails() {
-  const publicKey = 'DummyPublicKey' // Placeholder for public key
-  const poll: Poll = {
-    id: 1,
-    publicKey: 'DummyPollKey',
-    description: 'Favorite Thing about Christmas',
-    start: new Date('2024-11-24T01:02:00').getTime(),
-    end: new Date('2024-11-28T02:03:00').getTime(),
-    candidates: 2,
-  } // Dummy poll data
-  const candidates: Candidate[] = [
-    {
-      publicKey: 'dummy_public_key_1',
-      cid: 1001,
-      pollId: 101,
-      name: 'Candidate A',
-      votes: 0,
-      hasRegistered: false,
-    },
-    {
-      publicKey: 'dummy_public_key_2',
-      cid: 1002,
-      pollId: 101,
-      name: 'Candidate B',
-      votes: 0,
-      hasRegistered: false,
-    },
-  ]
+  const dispatch = useDispatch()
+  const { setRegModal } = globalActions
+  const { publicKey } = useWallet()
+  const { pollId } = useParams()
 
-  const handleSetRegModal = () => {
-    alert('Dummy registration modal triggered')
-  }
+  const { poll, candidates } = useSelector(
+    (states: RootState) => states.globalStates
+  )
+  const program = useMemo(() => getReadOnlyProvider(), [])
+
+  useEffect(() => {
+    if (!program || !pollId) return
+
+    const fetchDetails = async () => {
+      await fetchPollDetails(program!, pollId! as string)
+      await fetchAllCandidates(program!, pollId! as string)
+    }
+
+    fetchDetails()
+  }, [program, pollId])
 
   if (!poll) {
     return (
@@ -80,7 +78,7 @@ export default function PollDetails() {
           <button
             className="flex justify-center items-center space-x-2 bg-gray-800 text-white rounded-full
           px-6 py-2 text-lg font-bold"
-            onClick={handleSetRegModal}
+            onClick={() => dispatch(setRegModal('scale-100'))}
           >
             <span>Candidates</span>
             <FaRegEdit />

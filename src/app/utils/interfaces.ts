@@ -19,7 +19,6 @@ export interface Poll {
 export interface GlobalState {
   poll: Poll | null
   candidates: Candidate[]
-  voters: any[]
   regModal: string
 }
 

@@ -1,35 +1,82 @@
 'use client'
 
+import { useWallet } from '@solana/wallet-adapter-react'
 import { NextPage } from 'next'
-import { useState } from 'react'
+import { BN } from '@coral-xyz/anchor'
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'react-toastify'
+import { createPoll, getCounter, getProvider } from '../services/blokchain'
 
 const Page: NextPage = () => {
+  const { publicKey, sendTransaction, signTransaction } = useWallet()
+  const [submitting, setSubmitting] = useState<boolean>(false)
+  const [nextCount, setNextCount] = useState<BN>(new BN(0))
+  const [isInitialized, setIsInitialized] = useState<boolean>(false)
+
+  const program = useMemo(
+    () => getProvider(publicKey, signTransaction, sendTransaction),
+    [publicKey, signTransaction, sendTransaction]
+  )
+
   const [formData, setFormData] = useState({
     description: '',
     startDate: '',
     endDate: '',
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const fetchCounter = async () => {
+    if (!program) return
+    const count = await getCounter(program!)
+    setNextCount(count.add(new BN(1)))
+    setIsInitialized(count.gte(new BN(0)))
+  }
+
+  useEffect(() => {
+    fetchCounter()
+  }, [program, submitting])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!program || !isInitialized) return
+
     const { description, startDate, endDate } = formData
 
     const startTimestamp = new Date(startDate).getTime() / 1000
     const endTimestamp = new Date(endDate).getTime() / 1000
 
-    console.log('Poll Details:', {
-      description,
-      startTimestamp,
-      endTimestamp,
-    })
+    await toast.promise(
+      new Promise<void>(async (resolve, reject) => {
+        try {
+          setSubmitting(true)
+          const tx = await createPoll(
+            program!,
+            publicKey!,
+            nextCount,
+            description,
+            startTimestamp,
+            endTimestamp
+          )
 
-    setFormData({
-      description: '',
-      startDate: '',
-      endDate: '',
-    })
+          console.log(tx)
+          setFormData({
+            description: '',
+            startDate: '',
+            endDate: '',
+          })
 
-    alert('Poll created successfully!')
+          await fetchCounter()
+          resolve(tx as any)
+        } catch (error) {
+          console.error('Transaction failed:', error)
+          reject(error)
+        }
+      }),
+      {
+        pending: 'Approve transaction...',
+        success: 'Transaction successful 👌',
+        error: 'Encountered error 🤯',
+      }
+    )
   }
 
   return (
